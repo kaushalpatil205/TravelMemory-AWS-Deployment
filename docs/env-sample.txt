@@ -1,0 +1,6 @@
+# TravelMemory Backend Environment Variables
+# File location on EC2: ~/TravelMemory/backend/.env
+# IMPORTANT: Never commit actual credentials to GitHub
+
+PORT=3000
+MONGO_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/travelmemory?retryWrites=true&w=majority
