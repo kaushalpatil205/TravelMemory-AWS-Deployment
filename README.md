@@ -17,7 +17,8 @@
 
 ## 📐 Architecture Diagram
 
-![TravelMemory AWS Architecture](architecture/TravelMemory-AWS-Architecture.png)
+![TravelMemory AWS Architecture](architecture/travelmemory_draxil_site_architecture.png)
+![TravelMemory Web Architecture](architecture/preview.webp)
 
 ### How Traffic Flows
 
@@ -113,7 +114,7 @@ React   React         Node.js  Node.js
 
 ## 📸 Deployment Screenshots
 
-All deployment screenshots are stored in the `/screenshots` folder documenting every step. See `DEPLOYMENT_DOCS.md` for a full step-by-step screenshot walkthrough.
+All 75 deployment screenshots are stored in the `/screenshots` folder documenting every step.
 
 ---
 
@@ -121,10 +122,27 @@ All deployment screenshots are stored in the `/screenshots` folder documenting e
 
 ### Phase 1 — AWS Initial Setup
 
+**1A. Create Key Pair**
+
+Navigate to: EC2 → Network & Security → Key Pairs → Create key pair
+
+
+```
+Name:   travelmemory-key
+Type:   RSA
+Format: .pem
+```
+
+The `.pem` file downloads automatically. It is the only way to SSH into your servers.
+
 **1B. Create Backend Security Group (TM-Backend-SG)**
+
+Navigate to: EC2 → Security Groups → Create security group
+
 ![Backend SG](screenshots/1-%20Backend%20Security%20Group.png)
 
 **1C. Create Frontend Security Group (TM-Frontend-SG)**
+
 ![Frontend SG](screenshots/2-%20Frontend%20Security%20Group.png)
 
 ---
@@ -134,12 +152,16 @@ All deployment screenshots are stored in the `/screenshots` folder documenting e
 ![MongoDB Cluster](screenshots/3%20-%20MongoDB%20user.png)
 
 1. Created free M0 cluster at [mongodb.com/atlas](https://mongodb.com/atlas)
-2. Network Access: `0.0.0.0/0` — allows all IP addresses
+2. Cluster: `TravelMemoryCluster`, Region: `ap-south-1`
+3. Database user: `tmuser` with Atlas admin role
+4. Network Access: `0.0.0.0/0` — allows all IP addresses
 
 ![Network Access](screenshots/4%20-%20IP%20Access%20list.png)
 
-Connection string:
-![Connection string](screenshots/5%20-%20MONGODB%20connection%20string.png)
+Connection string format:
+```
+mongodb+srv://tmuser:<password>@travelmemorycluster.xxxxx.mongodb.net/travelmemory?retryWrites=true&w=majority
+```
 
 ---
 
@@ -150,59 +172,225 @@ Connection string:
 Each instance created with:
 - AMI: **Ubuntu Server 22.04 LTS**
 - Type: **t2.micro** (free tier)
+- Key pair: **travelmemory-key**
+- Storage: 8 GB gp2
+
+![Instances With IPs](screenshots/61%20-%20Both%20instance%20active%20.png)
 
 ---
 
 ### Phase 4 — Backend Configuration (TM-Backend-1 and TM-Backend-2)
 
 **SSH into the instance:**
+```bash
+ssh -i ~/Downloads/travelmemory-key.pem ubuntu@<BACKEND-EC2-PUBLIC-IP>
+```
+
 ![SSH Connected](screenshots/9%20-%20Accessing%20Backend%20Instance%201%20.png)
 
 **Install all dependencies:**
-![Node.js Installed](screenshots/12%20-%20NodeJS%20installed%20.png)
+```bash
+# Update the system
+sudo apt update
+sudo apt upgrade -y
+
+# Install Node.js 18 (LTS)
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# Verify
+node --version   # v18.x.x
+npm --version    # 9.x.x
+
+# Install Git and Nginx
+sudo apt install -y git nginx
+
+# Start and enable Nginx
+sudo systemctl start nginx
+sudo systemctl enable nginx
+```
+
+![Node.js Version](screenshots/12%20-%20NodeJS%20installed%20.png)
+![Nginx Running](screenshots/13%20-%20Nginx%20Server%20Started.png)
 
 **Clone the repository:**
-![Repo Clone](screenshots/15%20-%20Cloning%20Git%20Repo%20in%20Backend%20Instance%201%20.png)
+```bash
+cd ~
+git clone https://github.com/UnpredictablePrashant/TravelMemory.git
+cd TravelMemory/backend
+```
+
+**Install Node.js dependencies:**
+```bash
+npm install
+```
+
+![npm install](screenshots/16%20-%20Installing%20NPM%20%20in%20Backend%20instance%201.png)
 
 **Create the .env file:**
+```bash
+nano .env
+```
+
+Contents:
+```
+PORT=3000
+MONGO_URI=mongodb+srv://tmuser:TravelMemory@2024@travelmemorycluster.xxxxx.mongodb.net/travelmemory?retryWrites=true&w=majority
+```
+
 ![.env File](screenshots/17%20-%20Connecting%20Database%20to%20Backend%20Instance%20one.png)
 
 **Test the server runs:**
+```bash
+node index.js
+# Should show: Server running on port 3000 + MongoDB connected
+```
+
 ![Server Started](screenshots/%2019%20-%20Backend%20Server%20Started.png)
 
 **Start with PM2:**
+```bash
+sudo npm install -g pm2
+pm2 start index.js --name "tm-backend"
+pm2 startup
+# Run the command PM2 outputs above
+pm2 save
+```
+
 ![PM2 Online](screenshots/20.1%20-%20PM2%20Online.png)
 
 **Configure Nginx reverse proxy:**
+```bash
+sudo rm /etc/nginx/sites-enabled/default
+sudo nano /etc/nginx/sites-available/tm-backend
+```
+
+Paste the backend Nginx config (see `/nginx-configs/backend-nginx.conf`):
+
+```bash
+sudo ln -s /etc/nginx/sites-available/tm-backend /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
 ![Nginx Test OK](screenshots/23%20-nginx-config-test-ok-backend1.png)
+
+> All above steps repeated identically on **TM-Backend-2**.
 
 ---
 
 ### Phase 5 — Frontend Configuration (TM-Frontend-1 and TM-Frontend-2)
 
-**Install dependencies & clone:**
-![Clone Frontend](screenshots/33%20-FRONTEND%20SETUP%20ON%20TM-Frontend-1.png)
+**SSH into frontend instance:**
+```bash
+ssh -i ~/Downloads/travelmemory-key.pem ubuntu@<FRONTEND-EC2-PUBLIC-IP>
+```
 
-Updated URL content:
-![URL.js Updated](screenshots/36%20-url-js-updated-backend-alb-dns-frontend1.png)
+**Install dependencies (same as backend):**
+```bash
+sudo apt update && sudo apt upgrade -y
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt install -y nodejs git nginx
+sudo systemctl start nginx && sudo systemctl enable nginx
+```
+
+**Clone and update the backend URL:**
+```bash
+cd ~
+git clone https://github.com/UnpredictablePrashant/TravelMemory.git
+nano ~/TravelMemory/frontend/src/url.js
+```
+
+Updated content:
+```javascript
+export const baseURL = "https://api.draxil.site"
+```
+
+![URL.js Updated](screenshots/57%20-%20url-js-updated-api-draxil-site-frontend1.png)
 
 **Install, build and deploy:**
+```bash
+cd ~/TravelMemory/frontend
+npm install
+npm run build
+sudo cp -r build/* /var/www/html/
+```
+
 ![Build Success](screenshots/38%20-%20npm-build-success-frontend1.png)
 
 **Configure Nginx for React SPA:**
+```bash
+sudo rm /etc/nginx/sites-enabled/default
+sudo nano /etc/nginx/sites-available/tm-frontend
+```
+
+Paste the frontend Nginx config (see `/nginx-configs/frontend-nginx.conf`):
+
+```bash
+sudo ln -s /etc/nginx/sites-available/tm-frontend /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
 ![App in Browser](screenshots/41%20-%20travelmemory-app-browser-frontend1-ip.png)
+
+> All above steps repeated identically on **TM-Frontend-2**.
 
 ---
 
 ### Phase 6 — AWS Load Balancers
 
-**Create Target Groups:**
-![Backend TG](screenshots/30%20-%20BACKEND%20target%20groups.png)
-![Frontend TG](screenshots/44%20Frontend%20TG.png)
+**Create TM-Backend-TG (Target Group):**
 
-**Create Application Load Balancers:**
-![Frontend ALB Active](screenshots/45%20Frontend%20ALB.png)
+Navigate to: EC2 → Target Groups → Create target group
+
+```
+Name:              TM-Backend-TG
+Target type:       Instances
+Protocol / Port:   HTTP / 80
+Health check path: /
+Targets:           TM-Backend-1, TM-Backend-2
+```
+
+![Backend TG](screenshots/30%20-%20BACKEND%20target%20groups.png)
+
+**Create TM-Backend-ALB (Application Load Balancer):**
+
+Navigate to: EC2 → Load Balancers → Create → Application Load Balancer
+
+```
+Name:       TM-Backend-ALB
+Scheme:     Internet-facing
+AZs:        All available (ap-south-1a, 1b, 1c)
+Security:   TM-Backend-SG
+Listener:   HTTP:80 → TM-Backend-TG
+```
+
 ![Backend ALB Active](screenshots/32%20-%20Backend%20load%20balancer.png)
+
+**Backend ALB DNS name:**
+```
+TM-Backend-ALB-1289212996.ap-south-1.elb.amazonaws.com
+```
+
+**Create TM-Frontend-TG and TM-Frontend-ALB** using the same process:
+
+```
+Frontend TG:  TM-Frontend-TG  (targets: TM-Frontend-1, TM-Frontend-2)
+Frontend ALB: TM-Frontend-ALB → forwards to TM-Frontend-TG
+```
+
+![Frontend ALB Active](screenshots/45%20Frontend%20ALB.png)
+
+**Frontend ALB DNS name:**
+```
+TM-Frontend-ALB-328778329.ap-south-1.elb.amazonaws.com
+```
+
+**Both target groups showing Healthy:**
+
+![Backend Targets Healthy](screenshots/68%20T7%20TG%20Backend%20Health.png)
+![Frontend Targets Healthy](screenshots/67%20T6%20-%20TG%20frontend%20health.png)
 
 ---
 
@@ -211,13 +399,32 @@ Updated URL content:
 Domain purchased: **draxil.site** via Namecheap
 
 **Added domain to Cloudflare → Updated nameservers at Namecheap:**
+
 ![Namecheap Nameservers Updated](screenshots/48%20-%20namecheap-nameservers-updated-cloudflare.png)
 
 **Created 3 DNS records:**
+
 ![All DNS Records](screenshots/53%20-%20Check%20cloudflare%20domain%20is%20active%20cloudflare-all-3-dns-records-together.png)
 
+| Type | Name | Value |
+|------|------|-------|
+| A | @ | TM-Frontend-1 Public IP |
+| CNAME | www | TM-Frontend-ALB-328778329.ap-south-1.elb.amazonaws.com |
+| CNAME | api | TM-Backend-ALB-1289212996.ap-south-1.elb.amazonaws.com |
+
 **SSL Configuration — set to Flexible:**
+
 ![SSL Flexible](screenshots/54%20-cloudflare-ssl-flexible-mode-selected.png)
+
+> **Note:** Initially set to "Full" SSL mode which caused **Error 521** — Cloudflare
+> was trying to connect to EC2 on port 443 (HTTPS) but Nginx only listens on port 80.
+> Fixed by switching to **Flexible** mode (Cloudflare handles HTTPS externally,
+> connects to EC2 internally via HTTP on port 80).
+
+
+Enabled:
+- Always Use HTTPS ✅
+- Automatic HTTPS Rewrites ✅
 
 ---
 
@@ -229,6 +436,9 @@ Domain purchased: **draxil.site** via Namecheap
 | www HTTPS | https://www.draxil.site | ✅ App loads with 🔒 padlock |
 | HTTP → HTTPS redirect | http://www.draxil.site | ✅ Auto-redirected to HTTPS |
 | API endpoint | https://api.draxil.site | ✅ Backend responds |
+| Backend load balancer | AWS console | ✅ Both targets Healthy |
+| Frontend load balancer | AWS console | ✅ Both targets Healthy |
+| End-to-end | Add travel memory | ✅ Saves and displays |
 
 ![App with HTTPS Padlock](screenshots/62%20Test%201%20Final%20Website%20from%20Frontend%20-%20Test%20www%20with%20HTTPS%20CNAME%20RECORD.png)
 ![Memory Added](screenshots/65%20T4%20-%20Database%20is%20getting%20added%20in%20Database%20mongodb.png)
@@ -241,9 +451,45 @@ Domain purchased: **draxil.site** via Namecheap
 
 See full file: [`nginx-configs/backend-nginx.conf`](nginx-configs/backend-nginx.conf)
 
+```nginx
+server {
+    listen 80;
+    server_name _;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
 ### Frontend (React SPA)
 
 See full file: [`nginx-configs/frontend-nginx.conf`](nginx-configs/frontend-nginx.conf)
+
+```nginx
+server {
+    listen 80;
+    server_name _;
+    root /var/www/html;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
+        expires 1y;
+        add_header Cache-Control "public, no-transform";
+    }
+}
+```
 
 ---
 
@@ -254,6 +500,38 @@ See full file: [`nginx-configs/frontend-nginx.conf`](nginx-configs/frontend-ngin
 
 **Fix:** Cloudflare → SSL/TLS → Change from "Full" to **"Flexible"**
 
+### PM2 App Shows "Errored"
+```bash
+pm2 logs tm-backend    # Read the error
+cat .env               # Check MongoDB URI is correct
+pm2 restart tm-backend # Restart after fixing
+```
+
+### Target Group Shows "Unhealthy"
+```bash
+sudo systemctl status nginx    # Is Nginx running?
+pm2 status                     # Is Node.js app running?
+curl http://localhost/         # Test locally
+sudo systemctl restart nginx   # Restart if needed
+```
+
+### React App — API Calls Failing
+```bash
+cat ~/TravelMemory/frontend/src/url.js
+# Must show: export const baseURL = "https://api.draxil.site"
+# If wrong → fix the URL → rebuild → redeploy
+cd ~/TravelMemory/frontend
+npm run build
+sudo cp -r build/* /var/www/html/
+```
+
+### SSH "Permission Denied"
+```bash
+# Make sure you have the right username (ubuntu for Ubuntu AMIs)
+# Make sure you point to the correct .pem file
+ssh -i ~/Downloads/travelmemory-key.pem ubuntu@YOUR-EC2-IP
+```
+
 ---
 
 ## 📁 Repository Structure
@@ -262,7 +540,6 @@ See full file: [`nginx-configs/frontend-nginx.conf`](nginx-configs/frontend-ngin
 TravelMemory-AWS-Deployment/
 │
 ├── README.md                          ← Complete deployment documentation
-├── DEPLOYMENT_DOCS.md                 ← Step by step deployment with images
 │
 ├── architecture/
 │   ├── TravelMemory-AWS-Architecture.png    ← Architecture diagram (PNG)
@@ -276,6 +553,9 @@ TravelMemory-AWS-Deployment/
 │   └── env-sample.txt                 ← .env file template (no secrets)
 │
 └── screenshots/                       ← 75 deployment screenshots
+    ├── 01-aws-console-region.png
+    ├── 02-key-pair-created.png
+    └── ... (all 75 screenshots)
 ```
 
 ---
