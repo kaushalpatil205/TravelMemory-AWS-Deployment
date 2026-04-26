@@ -111,7 +111,7 @@ React   React         Node.js  Node.js
 
 ## 📸 Deployment Screenshots
 
-All deployment screenshots are stored in the `/screenshots` folder documenting every step. See `DEPLOYMENT_DOCS.md` for a full step-by-step screenshot walkthrough.
+All 75 deployment screenshots are stored in the `/screenshots` folder documenting every step.
 
 ---
 
@@ -122,7 +122,6 @@ All deployment screenshots are stored in the `/screenshots` folder documenting e
 **1A. Create Key Pair**
 
 Navigate to: EC2 → Network & Security → Key Pairs → Create key pair
-
 
 ```
 Name:   travelmemory-key
@@ -136,24 +135,16 @@ The `.pem` file downloads automatically. It is the only way to SSH into your ser
 
 Navigate to: EC2 → Security Groups → Create security group
 
-![Backend SG](screenshots/1-%20Backend%20Security%20Group.png)
-
 **1C. Create Frontend Security Group (TM-Frontend-SG)**
-
-![Frontend SG](screenshots/2-%20Frontend%20Security%20Group.png)
 
 ---
 
 ### Phase 2 — MongoDB Atlas Database
 
-![MongoDB Cluster](screenshots/3%20-%20MongoDB%20user.png)
-
 1. Created free M0 cluster at [mongodb.com/atlas](https://mongodb.com/atlas)
 2. Cluster: `TravelMemoryCluster`, Region: `ap-south-1`
 3. Database user: `tmuser` with Atlas admin role
 4. Network Access: `0.0.0.0/0` — allows all IP addresses
-
-![Network Access](screenshots/4%20-%20IP%20Access%20list.png)
 
 Connection string format:
 ```
@@ -164,15 +155,11 @@ mongodb+srv://tmuser:<password>@travelmemorycluster.xxxxx.mongodb.net/travelmemo
 
 ### Phase 3 — Launch 4 EC2 Instances
 
-![All 4 Instances](screenshots/6%20%20-%20Backend%20Instances.png)
-
 Each instance created with:
 - AMI: **Ubuntu Server 22.04 LTS**
 - Type: **t2.micro** (free tier)
 - Key pair: **travelmemory-key**
 - Storage: 8 GB gp2
-
-![Instances With IPs](screenshots/61%20-%20Both%20instance%20active%20.png)
 
 ---
 
@@ -182,8 +169,6 @@ Each instance created with:
 ```bash
 ssh -i ~/Downloads/travelmemory-key.pem ubuntu@<BACKEND-EC2-PUBLIC-IP>
 ```
-
-![SSH Connected](screenshots/9%20-%20Accessing%20Backend%20Instance%201%20.png)
 
 **Install all dependencies:**
 ```bash
@@ -207,9 +192,6 @@ sudo systemctl start nginx
 sudo systemctl enable nginx
 ```
 
-![Node.js Version](screenshots/12%20-%20NodeJS%20installed%20.png)
-![Nginx Running](screenshots/13%20-%20Nginx%20Server%20Started.png)
-
 **Clone the repository:**
 ```bash
 cd ~
@@ -222,8 +204,6 @@ cd TravelMemory/backend
 npm install
 ```
 
-![npm install](screenshots/16%20-%20Installing%20NPM%20%20in%20Backend%20instance%201.png)
-
 **Create the .env file:**
 ```bash
 nano .env
@@ -235,15 +215,11 @@ PORT=3000
 MONGO_URI=mongodb+srv://tmuser:TravelMemory@2024@travelmemorycluster.xxxxx.mongodb.net/travelmemory?retryWrites=true&w=majority
 ```
 
-![.env File](screenshots/17%20-%20Connecting%20Database%20to%20Backend%20Instance%20one.png)
-
 **Test the server runs:**
 ```bash
 node index.js
 # Should show: Server running on port 3000 + MongoDB connected
 ```
-
-![Server Started](screenshots/%2019%20-%20Backend%20Server%20Started.png)
 
 **Start with PM2:**
 ```bash
@@ -253,8 +229,6 @@ pm2 startup
 # Run the command PM2 outputs above
 pm2 save
 ```
-
-![PM2 Online](screenshots/20.1%20-%20PM2%20Online.png)
 
 **Configure Nginx reverse proxy:**
 ```bash
@@ -269,8 +243,6 @@ sudo ln -s /etc/nginx/sites-available/tm-backend /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 ```
-
-![Nginx Test OK](screenshots/23%20-nginx-config-test-ok-backend1.png)
 
 > All above steps repeated identically on **TM-Backend-2**.
 
@@ -303,8 +275,6 @@ Updated content:
 export const baseURL = "https://api.draxil.site"
 ```
 
-![URL.js Updated](screenshots/36%20-url-js-updated-backend-alb-dns-frontend1.png)
-
 **Install, build and deploy:**
 ```bash
 cd ~/TravelMemory/frontend
@@ -312,8 +282,6 @@ npm install
 npm run build
 sudo cp -r build/* /var/www/html/
 ```
-
-![Build Success](screenshots/38%20-%20npm-build-success-frontend1.png)
 
 **Configure Nginx for React SPA:**
 ```bash
@@ -328,8 +296,6 @@ sudo ln -s /etc/nginx/sites-available/tm-frontend /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 ```
-
-![App in Browser](screenshots/41%20-%20travelmemory-app-browser-frontend1-ip.png)
 
 > All above steps repeated identically on **TM-Frontend-2**.
 
@@ -349,8 +315,6 @@ Health check path: /
 Targets:           TM-Backend-1, TM-Backend-2
 ```
 
-![Backend TG](screenshots/30%20-%20BACKEND%20target%20groups.png)
-
 **Create TM-Backend-ALB (Application Load Balancer):**
 
 Navigate to: EC2 → Load Balancers → Create → Application Load Balancer
@@ -362,8 +326,6 @@ AZs:        All available (ap-south-1a, 1b, 1c)
 Security:   TM-Backend-SG
 Listener:   HTTP:80 → TM-Backend-TG
 ```
-
-![Backend ALB Active](screenshots/32%20-%20Backend%20load%20balancer.png)
 
 **Backend ALB DNS name:**
 ```
@@ -377,17 +339,12 @@ Frontend TG:  TM-Frontend-TG  (targets: TM-Frontend-1, TM-Frontend-2)
 Frontend ALB: TM-Frontend-ALB → forwards to TM-Frontend-TG
 ```
 
-![Frontend ALB Active](screenshots/45%20Frontend%20ALB.png)
-
 **Frontend ALB DNS name:**
 ```
 TM-Frontend-ALB-328778329.ap-south-1.elb.amazonaws.com
 ```
 
 **Both target groups showing Healthy:**
-
-![Backend Targets Healthy](screenshots/68%20T7%20TG%20Backend%20Health.png)
-![Frontend Targets Healthy](screenshots/67%20T6%20-%20TG%20frontend%20health.png)
 
 ---
 
@@ -397,11 +354,7 @@ Domain purchased: **draxil.site** via Namecheap
 
 **Added domain to Cloudflare → Updated nameservers at Namecheap:**
 
-![Namecheap Nameservers Updated](screenshots/48%20-%20namecheap-nameservers-updated-cloudflare.png)
-
 **Created 3 DNS records:**
-
-![All DNS Records](screenshots/53%20-%20Check%20cloudflare%20domain%20is%20active%20cloudflare-all-3-dns-records-together.png)
 
 | Type | Name | Value |
 |------|------|-------|
@@ -411,13 +364,10 @@ Domain purchased: **draxil.site** via Namecheap
 
 **SSL Configuration — set to Flexible:**
 
-![SSL Flexible](screenshots/54%20-cloudflare-ssl-flexible-mode-selected.png)
-
 > **Note:** Initially set to "Full" SSL mode which caused **Error 521** — Cloudflare
 > was trying to connect to EC2 on port 443 (HTTPS) but Nginx only listens on port 80.
 > Fixed by switching to **Flexible** mode (Cloudflare handles HTTPS externally,
 > connects to EC2 internally via HTTP on port 80).
-
 
 Enabled:
 - Always Use HTTPS ✅
@@ -436,9 +386,6 @@ Enabled:
 | Backend load balancer | AWS console | ✅ Both targets Healthy |
 | Frontend load balancer | AWS console | ✅ Both targets Healthy |
 | End-to-end | Add travel memory | ✅ Saves and displays |
-
-![App with HTTPS Padlock](screenshots/62%20Test%201%20Final%20Website%20from%20Frontend%20-%20Test%20www%20with%20HTTPS%20CNAME%20RECORD.png)
-![Memory Added](screenshots/65%20T4%20-%20Database%20is%20getting%20added%20in%20Database%20mongodb.png)
 
 ---
 
@@ -540,7 +487,7 @@ TravelMemory-AWS-Deployment/
 │
 ├── architecture/
 │   ├── TravelMemory-AWS-Architecture.png    ← Architecture diagram (PNG)
-│   └── preview.webp                         ← Editable draw.io file image
+│   └── TravelMemory-AWS-Architecture.drawio ← Editable draw.io file
 │
 ├── nginx-configs/
 │   ├── backend-nginx.conf             ← Nginx reverse proxy config
@@ -550,8 +497,9 @@ TravelMemory-AWS-Deployment/
 │   └── env-sample.txt                 ← .env file template (no secrets)
 │
 └── screenshots/                       ← 75 deployment screenshots
-    ├── 1- Backend Security Group.png
-    └── ... (all deployment screenshots)
+    ├── 01-aws-console-region.png
+    ├── 02-key-pair-created.png
+    └── ... (all 75 screenshots)
 ```
 
 ---
