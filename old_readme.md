@@ -17,81 +17,32 @@
 
 ## 📐 Architecture Diagram
 
+![TravelMemory AWS Architecture](architecture/TravelMemory-AWS-Architecture.png)
+
 ### How Traffic Flows
 
-```mermaid
-graph TD
-    %% Styling Classes
-    classDef user fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#000
-    classDef cloudflare fill:#fde0dc,stroke:#f4511e,stroke-width:2px,color:#000
-    classDef awsALB fill:#e8eaf6,stroke:#3f51b5,stroke-width:2px,color:#000
-    classDef ec2Front fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
-    classDef ec2Back fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000
-    classDef mongo fill:#e0f2f1,stroke:#00796b,stroke-width:2px,color:#000
-
-    %% User Layer
-    User(("User Browser<br>(HTTPS)")):::user
-
-    %% Cloudflare Layer
-    subgraph CF [Cloudflare Network - draxil.site]
-        direction TB
-        WAF{"WAF & SSL Termination"}
-        DNS_Root["draxil.site<br>(A Record)"]
-        DNS_WWW["www.draxil.site<br>(CNAME Record)"]
-        DNS_API["api.draxil.site<br>(CNAME Record)"]
-        
-        WAF --- DNS_Root
-        WAF --- DNS_WWW
-        WAF --- DNS_API
-    end
-    class CF cloudflare
-
-    %% AWS Network
-    subgraph AWS [AWS Cloud Environment ap-south-1]
-        direction TB
-        
-        %% Load Balancers
-        ALB_FE["TM-Frontend-ALB<br>(Application Load Balancer)"]:::awsALB
-        ALB_BE["TM-Backend-ALB<br>(Application Load Balancer)"]:::awsALB
-
-        %% Frontend Instances
-        subgraph FE_Instances [Frontend EC2 Instances / React SPA]
-            direction LR
-            FE1["TM-Frontend-1<br>Ubuntu 22.04<br>Nginx"]:::ec2Front
-            FE2["TM-Frontend-2<br>Ubuntu 22.04<br>Nginx"]:::ec2Front
-        end
-
-        %% Backend Instances
-        subgraph BE_Instances [Backend EC2 Instances / Node.js API]
-            direction LR
-            BE1["TM-Backend-1<br>Ubuntu 22.04<br>PM2 + Nginx"]:::ec2Back
-            BE2["TM-Backend-2<br>Ubuntu 22.04<br>PM2 + Nginx"]:::ec2Back
-        end
-    end
-
-    %% Database Layer
-    subgraph DB [MongoDB Atlas Cloud]
-        MongoCluster[("TravelMemoryCluster<br>(M0)")]:::mongo
-    end
-
-    %% Connections & Traffic Flow
-    User -->|HTTPS| WAF
-    
-    DNS_Root -.->|HTTP :80| FE1
-    DNS_WWW -->|HTTP :80| ALB_FE
-    DNS_API -->|HTTP :80| ALB_BE
-
-    ALB_FE ==>|HTTP :80| FE1
-    ALB_FE ==>|HTTP :80| FE2
-
-    ALB_BE ==>|HTTP :80| BE1
-    ALB_BE ==>|HTTP :80| BE2
-
-    FE1 -.->|API Calls| WAF
-    FE2 -.->|API Calls| WAF
-
-    BE1 ==>|Mongoose ODM| MongoCluster
-    BE2 ==>|Mongoose ODM| MongoCluster
+```
+User Browser (HTTPS)
+        │
+        ▼
+Cloudflare — draxil.site
+(DNS · SSL Termination · WAF)
+        │                    │
+  www / root              api subdomain
+  A record / CNAME        CNAME record
+        │                    │
+        ▼                    ▼
+TM-Frontend-ALB        TM-Backend-ALB
+(AWS App LB)           (AWS App LB)
+   │       │               │       │
+   ▼       ▼               ▼       ▼
+FE-1     FE-2           BE-1     BE-2
+React   React         Node.js  Node.js
++Nginx  +Nginx        +PM2     +PM2
+                          │
+                          ▼
+                   MongoDB Atlas
+                  (TravelMemoryCluster)
 ```
 
 ---
@@ -162,21 +113,7 @@ graph TD
 
 ## 📸 Deployment Screenshots
 
-Here are a few key snapshots from the deployment process:
-
-**1. AWS EC2 Instances Running:**
-![Frontend Instances](screenshots/8%20-%20Frontend%20Instance%20running%20.png)
-
-**2. Application Load Balancers Setup:**
-![ALB Setup](screenshots/46%20-%20Testing%20using%20ALB.png)
-
-**3. Cloudflare SSL Configuration (Flexible Mode):**
-![SSL Flexible Mode](screenshots/54%20-cloudflare-ssl-flexible-mode-selected.png)
-
-**4. Final Application Deployed with Custom Domain:**
-![Live Application](screenshots/62%20Test%201%20Final%20Website%20from%20Frontend%20-%20Test%20www%20with%20HTTPS%20CNAME%20RECORD.png)
-
-All 75 deployment screenshots are stored in the `/screenshots` folder documenting every step in detail.
+All 75 deployment screenshots are stored in the `/screenshots` folder documenting every step.
 
 ---
 
@@ -187,6 +124,8 @@ All 75 deployment screenshots are stored in the `/screenshots` folder documentin
 **1A. Create Key Pair**
 
 Navigate to: EC2 → Network & Security → Key Pairs → Create key pair
+
+![Key Pair Created](screenshots/02-key-pair-travelmemory-key-created.png)
 
 ```
 Name:   travelmemory-key
@@ -200,16 +139,24 @@ The `.pem` file downloads automatically. It is the only way to SSH into your ser
 
 Navigate to: EC2 → Security Groups → Create security group
 
+![Backend SG](screenshots/03-TM-Backend-SG-inbound-rules.png)
+
 **1C. Create Frontend Security Group (TM-Frontend-SG)**
+
+![Frontend SG](screenshots/04-TM-Frontend-SG-inbound-rules.png)
 
 ---
 
 ### Phase 2 — MongoDB Atlas Database
 
+![MongoDB Cluster](screenshots/06-mongodb-cluster-created.png)
+
 1. Created free M0 cluster at [mongodb.com/atlas](https://mongodb.com/atlas)
 2. Cluster: `TravelMemoryCluster`, Region: `ap-south-1`
 3. Database user: `tmuser` with Atlas admin role
 4. Network Access: `0.0.0.0/0` — allows all IP addresses
+
+![Network Access](screenshots/08-mongodb-network-access-allow-all.png)
 
 Connection string format:
 ```
@@ -220,11 +167,15 @@ mongodb+srv://tmuser:<password>@travelmemorycluster.xxxxx.mongodb.net/travelmemo
 
 ### Phase 3 — Launch 4 EC2 Instances
 
+![All 4 Instances](screenshots/10-all-4-ec2-instances-running.png)
+
 Each instance created with:
 - AMI: **Ubuntu Server 22.04 LTS**
 - Type: **t2.micro** (free tier)
 - Key pair: **travelmemory-key**
 - Storage: 8 GB gp2
+
+![Instances With IPs](screenshots/11-ec2-instances-public-ips-noted.png)
 
 ---
 
@@ -234,6 +185,8 @@ Each instance created with:
 ```bash
 ssh -i ~/Downloads/travelmemory-key.pem ubuntu@<BACKEND-EC2-PUBLIC-IP>
 ```
+
+![SSH Connected](screenshots/12-ssh-into-tm-backend-1.png)
 
 **Install all dependencies:**
 ```bash
@@ -257,6 +210,9 @@ sudo systemctl start nginx
 sudo systemctl enable nginx
 ```
 
+![Node.js Version](screenshots/13-nodejs-18-version-verified.png)
+![Nginx Running](screenshots/14-nginx-active-running-backend1.png)
+
 **Clone the repository:**
 ```bash
 cd ~
@@ -269,6 +225,8 @@ cd TravelMemory/backend
 npm install
 ```
 
+![npm install](screenshots/17-npm-install-backend-complete.png)
+
 **Create the .env file:**
 ```bash
 nano .env
@@ -280,11 +238,15 @@ PORT=3000
 MONGO_URI=mongodb+srv://tmuser:TravelMemory@2024@travelmemorycluster.xxxxx.mongodb.net/travelmemory?retryWrites=true&w=majority
 ```
 
+![.env File](screenshots/18-env-file-created-backend1.png)
+
 **Test the server runs:**
 ```bash
 node index.js
 # Should show: Server running on port 3000 + MongoDB connected
 ```
+
+![Server Started](screenshots/19-backend-server-started-mongodb-connected.png)
 
 **Start with PM2:**
 ```bash
@@ -294,6 +256,8 @@ pm2 startup
 # Run the command PM2 outputs above
 pm2 save
 ```
+
+![PM2 Online](screenshots/20-pm2-status-online-backend1.png)
 
 **Configure Nginx reverse proxy:**
 ```bash
@@ -308,6 +272,8 @@ sudo ln -s /etc/nginx/sites-available/tm-backend /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 ```
+
+![Nginx Test OK](screenshots/22-nginx-config-test-ok-backend1.png)
 
 > All above steps repeated identically on **TM-Backend-2**.
 
@@ -340,6 +306,8 @@ Updated content:
 export const baseURL = "https://api.draxil.site"
 ```
 
+![URL.js Updated](screenshots/58-url-js-updated-api-draxil-site-frontend1.png)
+
 **Install, build and deploy:**
 ```bash
 cd ~/TravelMemory/frontend
@@ -347,6 +315,8 @@ npm install
 npm run build
 sudo cp -r build/* /var/www/html/
 ```
+
+![Build Success](screenshots/34-npm-build-success-frontend1.png)
 
 **Configure Nginx for React SPA:**
 ```bash
@@ -361,6 +331,8 @@ sudo ln -s /etc/nginx/sites-available/tm-frontend /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 ```
+
+![App in Browser](screenshots/37-travelmemory-app-browser-frontend1-ip.png)
 
 > All above steps repeated identically on **TM-Frontend-2**.
 
@@ -380,6 +352,8 @@ Health check path: /
 Targets:           TM-Backend-1, TM-Backend-2
 ```
 
+![Backend TG](screenshots/41-tm-backend-tg-created-both-instances.png)
+
 **Create TM-Backend-ALB (Application Load Balancer):**
 
 Navigate to: EC2 → Load Balancers → Create → Application Load Balancer
@@ -391,6 +365,8 @@ AZs:        All available (ap-south-1a, 1b, 1c)
 Security:   TM-Backend-SG
 Listener:   HTTP:80 → TM-Backend-TG
 ```
+
+![Backend ALB Active](screenshots/43-tm-backend-alb-active-status.png)
 
 **Backend ALB DNS name:**
 ```
@@ -404,12 +380,17 @@ Frontend TG:  TM-Frontend-TG  (targets: TM-Frontend-1, TM-Frontend-2)
 Frontend ALB: TM-Frontend-ALB → forwards to TM-Frontend-TG
 ```
 
+![Frontend ALB Active](screenshots/45-tm-frontend-alb-active-status.png)
+
 **Frontend ALB DNS name:**
 ```
 TM-Frontend-ALB-328778329.ap-south-1.elb.amazonaws.com
 ```
 
 **Both target groups showing Healthy:**
+
+![Backend Targets Healthy](screenshots/66-tm-backend-tg-both-targets-healthy.png)
+![Frontend Targets Healthy](screenshots/67-tm-frontend-tg-both-targets-healthy.png)
 
 ---
 
@@ -419,7 +400,11 @@ Domain purchased: **draxil.site** via Namecheap
 
 **Added domain to Cloudflare → Updated nameservers at Namecheap:**
 
+![Namecheap Nameservers Updated](screenshots/50-namecheap-nameservers-updated-cloudflare.png)
+
 **Created 3 DNS records:**
+
+![All DNS Records](screenshots/54-cloudflare-all-3-dns-records-together.png)
 
 | Type | Name | Value |
 |------|------|-------|
@@ -429,10 +414,15 @@ Domain purchased: **draxil.site** via Namecheap
 
 **SSL Configuration — set to Flexible:**
 
+![SSL Flexible](screenshots/55-cloudflare-ssl-flexible-mode-selected.png)
+
 > **Note:** Initially set to "Full" SSL mode which caused **Error 521** — Cloudflare
 > was trying to connect to EC2 on port 443 (HTTPS) but Nginx only listens on port 80.
 > Fixed by switching to **Flexible** mode (Cloudflare handles HTTPS externally,
 > connects to EC2 internally via HTTP on port 80).
+
+![Error 521](screenshots/72-error-521-before-fix.png)
+![Fixed with Flexible](screenshots/73-ssl-changed-to-flexible-fix.png)
 
 Enabled:
 - Always Use HTTPS ✅
@@ -451,6 +441,9 @@ Enabled:
 | Backend load balancer | AWS console | ✅ Both targets Healthy |
 | Frontend load balancer | AWS console | ✅ Both targets Healthy |
 | End-to-end | Add travel memory | ✅ Saves and displays |
+
+![App with HTTPS Padlock](screenshots/63-app-loading-https-www-draxil-site-padlock.png)
+![Memory Added](screenshots/70-travel-memory-added-successfully.png)
 
 ---
 
